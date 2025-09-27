@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin - ACHADOS HOUSE</title>
+  <style>
+    :root{--bg:#f6f7fb;--card:#fff;--muted:#666;--primary:#774671;--accent:#898184}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);color:#111}
+    header{background:var(--card);padding:12px 20px;box-shadow:0 2px 6px rgba(0,0,0,.04);display:flex;align-items:center;gap:16px}
+    header h1{font-size:18px;margin:0}
+    .container{max-width:1100px;margin:20px auto;padding:0 16px}
+    .card{background:var(--card);padding:16px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.04);margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:1fr 320px;gap:16px}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type=text], input[type=password], textarea, select{width:100%;padding:8px;border:1px solid #e6e6e6;border-radius:6px;margin-bottom:10px;font-size:14px}
+    button{background:var(--primary);color:#fff;padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
+    button.secondary{background:#e6e6e6;color:#222}
+    .row{display:flex;gap:8px;align-items:center}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+    th,td{padding:10px;border-bottom:1px solid #f0f0f0;text-align:left}
+    .actions{display:flex;gap:8px}
+    .danger{background:#e85a5a}
+    .small{width:110px}
+    .notice{font-size:13px;color:var(--muted);margin-bottom:8px}
+    .token{font-family:monospace;background:#fafafa;padding:6px;border-radius:6px;border:1px dashed #eee;display:block;word-break:break-all}
+    .flex-vertical{display:flex;flex-direction:column;gap:8px}
+    .hidden{display:none}
+    .inline{display:inline-block}
+    input[type=file]{padding:6px 0}
+    .success{color:green}
+    .error{color:#b00}
+    @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Admin - ACHADOS HOUSE</h1>
+    <div style="margin-left:auto;font-size:13px;color:var(--muted)">Backend: /api — Node.js + JWT</div>
+  </header>
+
+  <div class="container">
+    <div class="card" id="authCard">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:240px">
+          <div class="notice">Faça login para editar produtos. Usuário padrão: <strong>admin</strong> / senha: <strong>admin123</strong> (troque depois).</div>
+
+          <div id="loginForm">
+            <label>Usuário</label>
+            <input id="username" type="text" placeholder="admin" value="admin" />
+            <label>Senha</label>
+            <input id="password" type="password" placeholder="sua senha" />
+            <div class="row">
+              <button id="btnLogin">Entrar</button>
+              <button id="btnTryGuest" class="secondary">Continuar sem login (somente leitura)</button>
+            </div>
+          </div>
+
+          <div id="logged" class="hidden">
+            <div class="notice">Autenticado como <strong id="who"></strong></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button id="btnLogout" class="secondary">Sair</button>
+              <button id="btnRefresh" class="secondary">Recarregar produtos</button>
+              <button id="btnChangePass" class="secondary">Alterar senha</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="width:320px">
+          <label>Token atual</label>
+          <div id="tokenBox" class="token">—</div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button id="btnCopy" class="secondary">Copiar</button>
+            <button id="btnClearToken" class="secondary">Limpar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h3 style="margin:0">Produtos</h3>
+            <div>
+              <button id="btnNew">+ Novo produto</button>
+              <button id="btnExport" class="secondary">Exportar JSON</button>
+              <input id="fileImport" type="file" accept="application/json" style="display:inline-block;margin-left:8px">
+            </div>
+          </div>
+
+          <div class="notice">Clique em editar para alterar campos. Para criar/editar/excluir é necessário login válido.</div>
+
+          <div id="listArea" style="margin-top:12px">
+            <div id="loadingList">Carregando produtos...</div>
+            <table id="productsTable" class="hidden">
+              <thead>
+                <tr><th>#</th><th>Imagem</th><th>Nome</th><th>Preço</th><th>Categoria</th><th>Tag</th><th>URL</th><th>Ações</th></tr>
+              </thead>
+              <tbody id="productsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top:0">Logs / mensagens</h3>
+          <div id="messages" style="min-height:60px;font-size:13px;color:var(--muted)"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h3 style="margin-top:0">Editor</h3>
+          <div class="notice">Preencha os campos e use Salvar ou Criar.</div>
+          <div class="flex-vertical">
+            <input id="fieldId" type="text" placeholder="ID (deixe vazio para novo)" />
+            <label>Imagem (URL relativo ou emoji)</label>
+            <input id="fieldImage" type="text" placeholder="/assets/produtos/ex.jpg" />
+            <label>Nome</label>
+            <input id="fieldName" type="text" placeholder="Nome do produto" />
+            <label>Preço</label>
+            <input id="fieldPrice" type="text" placeholder="R$ 0,00" />
+            <label>Categoria</label>
+            <input id="fieldCategory" type="text" placeholder="cozinha" />
+            <label>Tag</label>
+            <input id="fieldTag" type="text" placeholder="Mais vendido" />
+            <label>URL (afiliado)</label>
+            <input id="fieldUrl" type="text" placeholder="https://..." />
+            <div style="display:flex;gap:8px">
+              <button id="btnSaveItem">Salvar (PUT)</button>
+              <button id="btnCreateItem" class="secondary">Criar (POST)</button>
+              <button id="btnClear" class="secondary">Limpar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top:0">Alterar senha</h3>
+          <div class="flex-vertical">
+            <input id="oldPass" type="password" placeholder="Senha atual" />
+            <input id="newPass" type="password" placeholder="Nova senha" />
+            <div style="display:flex;gap:8px">
+              <button id="btnDoChange">Alterar</button>
+            </div>
+            <div id="passResult" style="font-size:13px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Utilities
+    const el = id => document.getElementById(id);
+    const API_BASE = '/api';
+    const MSG = el('messages');
+    function msg(text, type){ MSG.innerHTML = '<div class=\"' + (type||'') + '\">'+text+'</div>'; }
+
+    // token management
+    function getToken(){ return localStorage.getItem('achados_token') || ''; }
+    function setToken(t){
+      if(t){ localStorage.setItem('achados_token', t); el('tokenBox').textContent = t; el('logged').classList.remove('hidden'); el('loginForm').classList.add('hidden'); el('who').textContent = decodeUsernameFromToken(t) || 'admin'; }
+      else { localStorage.removeItem('achados_token'); el('tokenBox').textContent = '—'; el('logged').classList.add('hidden'); el('loginForm').classList.remove('hidden'); }
+    }
+    function decodeUsernameFromToken(t){
+      try{
+        const payload = t.split('.')[1];
+        return JSON.parse(atob(payload)).username;
+      }catch(e){ return ''; }
+    }
+
+    // set existing token on load
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const token = getToken();
+      if(token) setToken(token);
+      loadProducts();
+    });
+
+    // Login
+    el('btnLogin').addEventListener('click', async ()=>{
+      const u = el('username').value.trim();
+      const p = el('password').value;
+      if(!u || !p){ msg('Preencha usuário e senha', 'error'); return; }
+      try{
+        const res = await fetch(API_BASE + '/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p}) });
+        if(!res.ok){ const e = await res.json().catch(()=>({error:'Erro'})); msg('Login falhou: ' + (e.error||res.statusText), 'error'); return; }
+        const data = await res.json();
+        setToken(data.token);
+        msg('Login OK', 'success');
+        loadProducts();
+      }catch(err){ msg('Erro ao conectar: '+err.message, 'error'); }
+    });
+
+    el('btnLogout').addEventListener('click', ()=>{ setToken(null); msg('Desconectado'); });
+
+    el('btnCopy').addEventListener('click', ()=>{ const t=getToken(); if(!t){ msg('Sem token', 'error'); return; } navigator.clipboard.writeText(t).then(()=>msg('Token copiado para a área de transferência')) });
+
+    el('btnClearToken').addEventListener('click', ()=>{ setToken(null); msg('Token limpo'); });
+
+    el('btnTryGuest').addEventListener('click', ()=>{ setToken(null); loadProducts(); msg('Modo leitura (sem token)') });
+
+    el('btnRefresh').addEventListener('click', ()=> loadProducts());
+
+    // Fetch products (GET /api/products)
+    async function loadProducts(){
+      el('productsTable').classList.add('hidden');
+      el('loadingList').style.display = 'block';
+      try{
+        const res = await fetch(API_BASE + '/products');
+        if(!res.ok) throw new Error('Falha ao buscar produtos');
+        const data = await res.json();
+        renderProducts(data);
+        msg('Produtos carregados');
+      }catch(err){
+        // fallback: try to read localStorage cached products if API fails
+        msg('Falha ao buscar produtos pela API. Verifique se o backend está rodando. ' + err.message, 'error');
+        renderProducts([]);
+      }finally{
+        el('loadingList').style.display = 'none';
+      }
+    }
+
+    // Render table and wire actions
+    function renderProducts(list){
+      const tbody = el('productsBody');
+      tbody.innerHTML = '';
+      if(!Array.isArray(list)) list = [];
+      list.forEach((p, idx)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${idx+1}</td>
+          <td>${escapeHtml(p.image||'')}</td>
+          <td>${escapeHtml(p.name||'')}</td>
+          <td>${escapeHtml(p.price||'')}</td>
+          <td>${escapeHtml(p.category||'')}</td>
+          <td>${escapeHtml(p.tag||'')}</td>
+          <td style="max-width:220px;word-break:break-all">${escapeHtml(p.url||'')}</td>
+          <td class="actions">
+            <button data-id="${p.id}" class="editBtn">Editar</button>
+            <button data-id="${p.id}" class="delBtn danger">Apagar</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      el('productsTable').classList.remove('hidden');
+
+      // wire buttons
+      document.querySelectorAll('.editBtn').forEach(btn=> btn.addEventListener('click', ()=>{
+        const id = btn.getAttribute('data-id');
+        const item = list.find(x=>String(x.id)===String(id));
+        if(item) fillEditor(item);
+      }));
+      document.querySelectorAll('.delBtn').forEach(btn=> btn.addEventListener('click', ()=>{
+        const id = btn.getAttribute('data-id');
+        if(!confirm('Apagar produto id '+id+'?')) return;
+        deleteProduct(id);
+      }));
+    }
+
+    // fill editor
+    function fillEditor(p){
+      el('fieldId').value = p.id || '';
+      el('fieldImage').value = p.image || '';
+      el('fieldName').value = p.name || '';
+      el('fieldPrice').value = p.price || '';
+      el('fieldCategory').value = p.category || '';
+      el('fieldTag').value = p.tag || '';
+      el('fieldUrl').value = p.url || '';
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
+
+    // Clear editor
+    el('btnClear').addEventListener('click', ()=>{
+      el('fieldId').value=''; el('fieldImage').value=''; el('fieldName').value=''; el('fieldPrice').value=''; el('fieldCategory').value=''; el('fieldTag').value=''; el('fieldUrl').value='';
+    });
+
+    // Create (POST)
+    el('btnCreateItem').addEventListener('click', async ()=>{
+      const token = getToken();
+      if(!token){ msg('Necessita estar logado para criar', 'error'); return; }
+      const body = readEditor();
+      try{
+        const res = await fetch(API_BASE + '/products', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify(body) });
+        if(!res.ok){ const e = await res.json().catch(()=>({error:'Erro'})); msg('Erro ao criar: '+(e.error||res.statusText),'error'); return; }
+        const created = await res.json();
+        msg('Criado: ID '+created.id, 'success');
+        loadProducts();
+        el('btnClear').click();
+      }catch(err){ msg('Erro: '+err.message,'error'); }
+    });
+
+    // Save (PUT)
+    el('btnSaveItem').addEventListener('click', async ()=>{
+      const token = getToken();
+      if(!token){ msg('Necessita estar logado para editar', 'error'); return; }
+      const id = el('fieldId').value.trim();
+      if(!id){ msg('Coloque o ID do produto para editar (ou use Criar)', 'error'); return; }
+      const body = readEditor();
+      try{
+        const res = await fetch(API_BASE + '/products/' + encodeURIComponent(id), { method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify(body) });
+        if(!res.ok){ const e = await res.json().catch(()=>({error:'Erro'})); msg('Erro ao salvar: '+(e.error||res.statusText),'error'); return; }
+        const updated = await res.json();
+        msg('Atualizado: ID '+updated.id, 'success');
+        loadProducts();
+      }catch(err){ msg('Erro: '+err.message,'error'); }
+    });
+
+    // Delete
+    async function deleteProduct(id){
+      const token = getToken();
+      if(!token){ msg('Necessita estar logado para apagar', 'error'); return; }
+      try{
+        const res = await fetch(API_BASE + '/products/' + encodeURIComponent(id), { method:'DELETE', headers:{'Authorization':'Bearer '+token} });
+        if(res.status===204){ msg('Apagado com sucesso','success'); loadProducts(); }
+        else { const e = await res.json().catch(()=>({error:'Erro'})); msg('Erro ao apagar: '+(e.error||res.statusText),'error'); }
+      }catch(err){ msg('Erro: '+err.message,'error'); }
+    }
+
+    function readEditor(){
+      return {
+        image: el('fieldImage').value.trim(),
+        name: el('fieldName').value.trim(),
+        price: el('fieldPrice').value.trim(),
+        category: el('fieldCategory').value.trim(),
+        tag: el('fieldTag').value.trim(),
+        url: el('fieldUrl').value.trim()
+      };
+    }
+
+    // Export/Import JSON
+    el('btnExport').addEventListener('click', async ()=>{
+      try{
+        const res = await fetch(API_BASE + '/products');
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'products_export.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        msg('Exportado JSON');
+      }catch(err){ msg('Erro ao exportar: '+err.message,'error'); }
+    });
+
+    el('fileImport').addEventListener('change', async (e)=>{
+      const f = e.target.files[0];
+      if(!f) return;
+      if(!confirm('Deseja importar este JSON e substituir os produtos no servidor? (Requer login)')) return;
+      const token = getToken();
+      if(!token){ msg('É necessário login para importar', 'error'); return; }
+      try{
+        const text = await f.text();
+        const arr = JSON.parse(text);
+        if(!Array.isArray(arr)) throw new Error('JSON deve ser um array de produtos');
+        // strategy: delete all then create each (no batch endpoint provided)
+        // We'll try to read current products, delete those not in new list and update/create accordingly.
+        // Simple approach here: replace file on server isn't supported; we'll attempt to sync by id.
+        const currentRes = await fetch(API_BASE + '/products');
+        const current = await currentRes.json();
+        // delete products on server that are not in arr (by id)
+        const toKeepIds = arr.filter(x=>x.id).map(x=>String(x.id));
+        for(const p of current){
+          if(!toKeepIds.includes(String(p.id))){
+            await fetch(API_BASE + '/products/' + encodeURIComponent(p.id), { method:'DELETE', headers:{'Authorization':'Bearer '+token} });
+          }
+        }
+        // upsert items
+        for(const item of arr){
+          if(item.id){
+            // try put
+            const put = await fetch(API_BASE + '/products/' + encodeURIComponent(item.id), { method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify(item) });
+            if(!put.ok){
+              // try create without id
+              const tmp = Object.assign({}, item); delete tmp.id;
+              await fetch(API_BASE + '/products', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify(tmp) });
+            }
+          } else {
+            await fetch(API_BASE + '/products', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify(item) });
+          }
+        }
+        msg('Importação concluída');
+        loadProducts();
+      }catch(err){ msg('Erro ao importar: '+err.message,'error'); }
+      e.target.value = '';
+    });
+
+    // Change password
+    el('btnDoChange').addEventListener('click', async ()=>{
+      const token = getToken();
+      if(!token){ msg('Login necessário para alterar senha', 'error'); return; }
+      const oldP = el('oldPass').value;
+      const newP = el('newPass').value;
+      if(!oldP || !newP){ el('passResult').textContent = 'Preencha as duas senhas'; return; }
+      try{
+        const res = await fetch(API_BASE + '/auth/change-password', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({oldPassword: oldP, newPassword: newP}) });
+        if(!res.ok){ const e = await res.json().catch(()=>({error:'Erro'})); el('passResult').textContent = 'Erro: '+(e.error||res.statusText); return; }
+        el('passResult').textContent = 'Senha alterada com sucesso'; el('oldPass').value=''; el('newPass').value='';
+      }catch(err){ el('passResult').textContent = 'Erro: '+err.message; }
+    });
+
+    // New product button
+    el('btnNew').addEventListener('click', ()=>{
+      el('fieldId').value='';
+      el('fieldImage').value='';
+      el('fieldName').value='';
+      el('fieldPrice').value='';
+      el('fieldCategory').value='';
+      el('fieldTag').value='';
+      el('fieldUrl').value='';
+      window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+    });
+
+    // helper escape
+    function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'); }
+
+    // delete all (not exposed to UI) - utility for testing
+    async function deleteAllProductsForTesting(){
+      const token = getToken(); if(!token) return;
+      const res = await fetch(API_BASE + '/products'); const arr = await res.json();
+      for(const p of arr){ await fetch(API_BASE + '/products/' + p.id, { method:'DELETE', headers:{'Authorization':'Bearer '+token} }); }
+      msg('Todos apagados (teste)');
+      loadProducts();
+    }
+
+    // copy token on load
+    el('btnCopy').addEventListener('click', ()=>{
+      const t = getToken();
+      if(!t) return;
+      navigator.clipboard.writeText(t).then(()=> msg('Token copiado'));
+    });
+
+    // clear token
+    el('btnClearToken').addEventListener('click', ()=>{ setToken(null); msg('Token limpo'); });
+
+    // ensure tokenBox and login state reflect token
+    function setTokenUIFromStorage(){
+      const t = getToken();
+      if(t) setToken(t); else setToken(null);
+    }
+
+    setTokenUIFromStorage();
+  </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+# node
+node_modules/
+
+# ambiente (nunca comitar secrets/variáveis)
+.env
+.env.*.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.log
+
+# sistema / editores
+.DS_Store
+.vscode/
+.idea/
+
+# build / dist (se você adicionar bundler)
+dist/
+build/
+coverage/
+
+# arquivos de dados gerados em runtime (arquivo do servidor)
+data/*.json
+
+# arquivos temporários
+*.tmp
+*.swp
